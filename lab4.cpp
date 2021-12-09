@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <limits.h>
+#include<avr/interrupt.h>
 
 #include "LCD_HD44780.h"
 
@@ -18,50 +19,19 @@
 #define sbi(reg, bit) reg |= (_BV(bit))
 #endif
 
-struct Stack
-{
-    int top; //gora stosu
-    unsigned capacity; //ilosc elementow stosu
-    int *array; // tablica przechowujaca elementy
-    int option; // przechowuje wybrana operacje ( +,-,*,/)
+
+#define LED PD4
+
+int min=0,sec=0,ms=0, index=0;
+bool stop=false;
+struct miedzy_czas{
+	int miedzy_min;
+	int miedzy_sec;
+	int miedzy_ms;
 };
-
-struct Stack *createStack(unsigned capacity)
-{
-    struct Stack *stack = (struct Stack *)malloc(sizeof(struct Stack));
-    stack->capacity = capacity;
-    stack->top = -1;
-    stack->array = (int *)malloc(stack->capacity * sizeof(int));
-    stack->option = 0;
-    return stack;
-}
-
-int isFull(struct Stack *stack)
-{
-    return stack->top == stack->capacity - 1;
-}
-
-// Stos jest pusty kiedy top=-1
-int isEmpty(struct Stack *stack)
-{
-    return stack->top == -1;
-}
-
-void push(struct Stack *stack, int item)
-{
-    if (isFull(stack))
-        return;
-    stack->array[++stack->top] = item;
-}
-
-int pop(struct Stack *stack)
-{
-    if (isEmpty(stack))
-        return INT_MIN;
-    return stack->array[stack->top--];
-}
-
-void getKey(char *str, Stack *stack)
+miedzy_czas miedzy1[10];
+bool click=false;
+void getKey()
 {
     for (int i = 0; i < 4; i++)
     {
@@ -73,33 +43,31 @@ void getKey(char *str, Stack *stack)
             sbi(PORTC, i);
             if (i == 0)
             {
-                LCD_HD44780::showNumber(7);
-                char ch = '7';
-                strncat(str, &ch, 1);
+
             }
             if (i == 1)
             {
-                LCD_HD44780::showNumber(8);
-                char ch = '8';
-                strncat(str, &ch, 1);
+
             }
             if (i == 2)
             {
                 {
-                    LCD_HD44780::showNumber(9);
-                    char ch = '9';
-                    strncat(str, &ch, 1);
+
                 }
             }
             if (i == 3)
             {
                 {
-                    LCD_HD44780::writeText("/");
-                    if(isEmpty(stack))push(stack, atoi(str));
-                    str[0] = '\0';
-                    stack->option = 4;
+
+
                 }
             }
+            miedzy1[i].miedzy_min=min;
+            miedzy1[i].miedzy_ms=ms;
+            miedzy1[i].miedzy_sec=sec;
+            click=true;
+            index=i;
+
         }
         else if (bit_is_clear(PINC, 5))
         {
@@ -107,29 +75,33 @@ void getKey(char *str, Stack *stack)
             if (i == 0)
             {
 
-                LCD_HD44780::showNumber(4);
-                char ch = '4';
-                strncat(str, &ch, 1);
+
+
             }
             if (i == 1)
             {
-                LCD_HD44780::showNumber(5);
-                char ch = '5';
-                strncat(str, &ch, 1);
+
+
             }
             if (i == 2)
             {
-                LCD_HD44780::showNumber(6);
-                char ch = '6';
-                strncat(str, &ch, 1);
+
+
             }
             if (i == 3)
             {
-                LCD_HD44780::writeText("*");
-                if(isEmpty(stack))push(stack, atoi(str));
-                str[0] = '\0';
-                stack->option = 3;
+
             }
+        	if(click==true)
+        	{
+        		LCD_HD44780::goTo(0,1);
+        		LCD_HD44780::showNumber(miedzy1[i].miedzy_min);
+        		LCD_HD44780::writeText(":");
+        		LCD_HD44780::showNumber(miedzy1[i].miedzy_sec);
+        		LCD_HD44780::writeText(":");
+        		LCD_HD44780::showNumber(miedzy1[i].miedzy_ms);
+        	}
+
         }
         else if (bit_is_clear(PINC, 6))
         {
@@ -137,101 +109,53 @@ void getKey(char *str, Stack *stack)
             if (i == 0)
             {
                 LCD_HD44780::showNumber(1);
-                char ch = '1';
-                strncat(str, &ch, 1);
+
             }
             if (i == 1)
             {
                 LCD_HD44780::showNumber(2);
-                char ch = '2';
-                strncat(str, &ch, 1);
+
             }
             if (i == 2)
             {
                 LCD_HD44780::showNumber(3);
-                char ch = '3';
-                strncat(str, &ch, 1);
+
             }
             if (i == 3)
             {
                 LCD_HD44780::writeText("-");
-                if(isEmpty(stack))push(stack, atoi(str));
-                str[0] = '\0';
-                stack->option = 2;
+
             }
         }
         else if (bit_is_clear(PINC, 7))
         {
             if (i == 0)
             {
-                LCD_HD44780::showNumber(0);
-                char ch = '0';
-                strncat(str, &ch, 1);
+
+            	stop=false;
             }
             if (i == 1)
             {
-                LCD_HD44780::clear();
-                str[0]= '\0';
-                while(!isEmpty(stack))pop(stack); //usuwanie wszystkich elementow ze stosu
+                stop=true;
+
             }
             if (i == 2)
             {
 
-                switch (stack->option)
-                {
-                case 1:
-                {
-                    int sum[2];
-                    sum[0] = atoi(str);
-                    sum[1] = pop(stack);
-                    int result = sum[0] + sum[1];
-                    push(stack, result);
-                    LCD_HD44780::clear();
-                    LCD_HD44780::showNumber(result);
-                }
-                break;
-                case 2:
-                {
-                    int sum[2];
-                    sum[0] = atoi(str);
-                    sum[1] = pop(stack);
-                    int result = sum[1] - sum[0];
-                    push(stack, result);
-                    LCD_HD44780::clear();
-                    LCD_HD44780::showNumber(result);
-                }
-                break;
-                case 3:
-                {
-                    int sum[2];
-                    sum[0] = atoi(str);
-                    sum[1] = pop(stack);
-                    int result = sum[1] * sum[0];
-                    push(stack, result);
-                    LCD_HD44780::clear();
-                    LCD_HD44780::showNumber(result);
-                }
-                break;
-                case 4:
-                {
-                    int sum[2];
-                    sum[0] = atoi(str);
-                    sum[1] = pop(stack);
-                    int result = sum[1] / sum[0];
-                    push(stack, result);
-                    LCD_HD44780::clear();
-                    LCD_HD44780::showNumber(result);
-                }
-                break;
-                }
             }
 
             if (i == 3)
             {
-                LCD_HD44780::writeText("+");
-                if(isEmpty(stack))push(stack, atoi(str));
-                str[0] = '\0';
-                stack->option = 1;
+                ms=0;
+                sec=0;
+                min=0;
+                for(int k=0;k<4;k++)
+                {
+                	miedzy1[k].miedzy_min=0;
+                	miedzy1[k].miedzy_sec=0;
+                	miedzy1[k].miedzy_ms=0;
+                }
+
             }
         }
         sbi(PORTC, i);
@@ -239,19 +163,55 @@ void getKey(char *str, Stack *stack)
     }
 }
 
+ISR (TIMER1_OVF_vect)    // Timer1 ISR
+{
+	PORTD ^= (1 << LED);
+	if(stop==false)ms +=100;
+	LCD_HD44780::clear();
+	//LCD_HD44780::showNumber(a);
+	TCNT1 = 64755;   // for 1 sec at 8 MHz
+	if(ms == 1000)
+	{
+		sec += 1;
+		ms = 0;
+	}
+	if(sec == 60)
+	{
+		min += 1;
+		sec = 0;
+	}
+
+	LCD_HD44780::showNumber(min);
+	LCD_HD44780::writeText(":");
+	LCD_HD44780::showNumber(sec);
+	LCD_HD44780::writeText(":");
+
+	LCD_HD44780::showNumber(ms);
+
+	//LCD_HD44780::goTo(0,1); // przejscie do 2 linii
+	getKey();
+
+
+}
+
+
 int main()
 {
-    struct Stack *stack = createStack(100);
     DDRC = 0b00001111;
     PORTC = 0xff;
     DDRA = 0b00001111;
         PORTA = 0xff;
-    LCD_HD44780::init();
-    //LCD_HD44780::writeText("ass");
-    char str[] = "";
-    while (1)
-    {
-        getKey(str, stack);
-        _delay_ms(1000);
-    }
-}
+	//OCR1A |= (1 << WGM13) | (1 << WGM12) ;
+	//ICR1=100;
+	//TCNT1H |=
+	LCD_HD44780::init();
+	DDRD = (0x01 << LED);     //Configure the PORTD4 as output
+
+	//TCNT1 = 63974;   // for 1 sec at 8 MHz
+
+	TCCR1A = 0x00;
+	TCCR1B = (1<<CS10) | (1<<CS12);;  // Timer mode with 1024 prescler
+	TIMSK = (1 << TOIE1) ;   // Enable timer1 overflow interrupt(TOIE1)
+	sei();        // Enable global interrupts by setting global interrupt enable bit in SREG
+while(1){}
+ }
