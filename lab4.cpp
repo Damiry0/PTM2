@@ -5,6 +5,7 @@
 #include <string.h>
 #include <limits.h>
 #include<avr/interrupt.h>
+#include <stdio.h>
 
 #include "LCD_HD44780.h"
 
@@ -20,166 +21,23 @@
 #endif
 
 
-#define LED PD4
+#define LED PD0
+#define SYG PA0
 
-int min=0,sec=0,ms=0, index=0;
-bool stop=false;
-struct miedzy_czas{
-	int miedzy_min;
-	int miedzy_sec;
-	int miedzy_ms;
-};
-miedzy_czas miedzy1[10];
-bool click=false;
-void getKey()
-{
-    for (int i = 0; i < 4; i++)
-    {
-        cbi(PORTC, i);
-        cbi(PORTA, i);
-        if (bit_is_clear(PINC, 4))
-        {
-            sbi(PORTA, i);
-            sbi(PORTC, i);
-            if (i == 0)
-            {
-
-            }
-            if (i == 1)
-            {
-
-            }
-            if (i == 2)
-            {
-                {
-
-                }
-            }
-            if (i == 3)
-            {
-                {
-
-
-                }
-            }
-            miedzy1[i].miedzy_min=min;
-            miedzy1[i].miedzy_ms=ms;
-            miedzy1[i].miedzy_sec=sec;
-            click=true;
-            index=i;
-
-        }
-        else if (bit_is_clear(PINC, 5))
-        {
-            sbi(PORTC, i);
-            if (i == 0)
-            {
-
-
-
-            }
-            if (i == 1)
-            {
-
-
-            }
-            if (i == 2)
-            {
-
-
-            }
-            if (i == 3)
-            {
-
-            }
-        	if(click==true)
-        	{
-        		LCD_HD44780::goTo(0,1);
-        		LCD_HD44780::showNumber(miedzy1[i].miedzy_min);
-        		LCD_HD44780::writeText(":");
-        		LCD_HD44780::showNumber(miedzy1[i].miedzy_sec);
-        		LCD_HD44780::writeText(":");
-        		LCD_HD44780::showNumber(miedzy1[i].miedzy_ms);
-        	}
-
-        }
-        else if (bit_is_clear(PINC, 6))
-        {
-            sbi(PORTC, i);
-            if (i == 0)
-            {
-                LCD_HD44780::showNumber(1);
-
-            }
-            if (i == 1)
-            {
-                LCD_HD44780::showNumber(2);
-
-            }
-            if (i == 2)
-            {
-                LCD_HD44780::showNumber(3);
-
-            }
-            if (i == 3)
-            {
-                LCD_HD44780::writeText("-");
-
-            }
-        }
-        else if (bit_is_clear(PINC, 7))
-        {
-            if (i == 0)
-            {
-
-            	stop=false;
-            }
-            if (i == 1)
-            {
-                stop=true;
-
-            }
-            if (i == 2)
-            {
-
-            }
-
-            if (i == 3)
-            {
-                ms=0;
-                sec=0;
-                min=0;
-                for(int k=0;k<4;k++)
-                {
-                	miedzy1[k].miedzy_min=0;
-                	miedzy1[k].miedzy_sec=0;
-                	miedzy1[k].miedzy_ms=0;
-                }
-
-            }
-        }
-        sbi(PORTC, i);
-        sbi(PORTA, i);
-    }
+static inline void initADC0(void) {
+ADMUX |= (1 << REFS0) | (0 << REFS1); //reference voltage on AVCC
+ADCSRA |= (1 << ADPS1) | (1 << ADPS0) | (1 << ADPS2); //ADC clock prescaler /8
+ADCSRA |= (1 << ADEN); //enables the ADC
 }
 
-ISR (TIMER1_OVF_vect)    // Timer1 ISR
+/*ISR (TIMER1_OVF_vect)    // Timer1 ISR
 {
-	PORTD ^= (1 << LED);
-	if(stop==false)ms +=100;
+	PORTA^= (1 << SYG);
 	LCD_HD44780::clear();
 	//LCD_HD44780::showNumber(a);
 	TCNT1 = 64755;   // for 1 sec at 8 MHz
-	if(ms == 1000)
-	{
-		sec += 1;
-		ms = 0;
-	}
-	if(sec == 60)
-	{
-		min += 1;
-		sec = 0;
-	}
+
+
 
 	LCD_HD44780::showNumber(min);
 	LCD_HD44780::writeText(":");
@@ -188,16 +46,42 @@ ISR (TIMER1_OVF_vect)    // Timer1 ISR
 
 	LCD_HD44780::showNumber(ms);
 
-	//LCD_HD44780::goTo(0,1); // przejscie do 2 linii
-	getKey();
 
 
-}
+
+}*/
 
 
 int main()
 {
-    DDRC = 0b00001111;
+	double potentiometerValue;
+	uint16_t threshold_level;
+	threshold_level= 0b10000000;
+	DDRA |= (1 << PA0); //Data Direction Register B: writing a 1 to the bit enables output
+	LCD_HD44780::init();
+	initADC0();
+
+	while (1) {
+	ADCSRA |= (1 << ADSC); //start ADC conversion
+	loop_until_bit_is_clear(ADCSRA, ADSC); //wait until ADC conversion is done
+	potentiometerValue= ADC; //read ADC value in
+	char text[16];
+	int gubno = potentiometerValue * 26.3/100;
+	int hh = potentiometerValue * 26.3;
+	int h = hh%100;
+	LCD_HD44780::showNumber(gubno);
+	LCD_HD44780::writeText(".");
+	LCD_HD44780::showNumber(h);
+	_delay_ms(500);
+	LCD_HD44780::clear();
+
+	}
+
+
+
+
+
+  /*  DDRC = 0b00001111;
     PORTC = 0xff;
     DDRA = 0b00001111;
         PORTA = 0xff;
@@ -213,5 +97,7 @@ int main()
 	TCCR1B = (1<<CS10) | (1<<CS12);;  // Timer mode with 1024 prescler
 	TIMSK = (1 << TOIE1) ;   // Enable timer1 overflow interrupt(TOIE1)
 	sei();        // Enable global interrupts by setting global interrupt enable bit in SREG
-while(1){}
+while(1){}*/
+
+
  }
